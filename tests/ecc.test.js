@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const {generateMnemonic, mnemonicToSeed, validateBIP39Mnemonic} = require('@logmedaily/bip39');
 const {
     seedToKeyPair,
     getPublicKey,
@@ -10,12 +11,34 @@ const {
     generateSharedExchangeKey,
     encryptWithSharedExchangeKey,
     decryptWithSharedExchangeKey, generateSharedExchangeKeyHex, generateSharedExchangeKeyBN,
-    convertSharedExchangeKeyToBuffer
+    convertSharedExchangeKeyToBuffer, deriveDomainSeed
 } = require('../lib');
 
 describe('Cryptographic Function Tests', () => {
-    const seed = crypto.randomBytes(32);
-    const keyPair = seedToKeyPair(seed);
+
+    const mnemonic = generateMnemonic(12);
+    console.log(`generated mnemonic logged for testing - ${mnemonic}`);
+
+    const isMnemonicValid = validateBIP39Mnemonic(mnemonic);
+    console.log(`is generated mnemonic valid ${isMnemonicValid}`);
+
+    const baseSeed = mnemonicToSeed(mnemonic, 'example pass phrase');
+
+    console.log(`generatedSeed is ${baseSeed.toString('hex')}`);
+
+    // Derive domain-specific seeds
+    const seeds = {
+        network: deriveDomainSeed(baseSeed, 'network'),
+        identity: deriveDomainSeed(baseSeed, 'identity'),
+        data: deriveDomainSeed(baseSeed, 'data'),
+    };
+
+    const keyPairs = {
+        network: seedToKeyPair(seeds.network),
+        identity: seedToKeyPair(seeds.identity),
+        data: seedToKeyPair(seeds.data),
+    };
+    const keyPair = seedToKeyPair(baseSeed);
 
     test('Key pair generation from seed', () => {
         expect(keyPair).toBeDefined();
@@ -40,11 +63,18 @@ describe('Cryptographic Function Tests', () => {
     test('Signing and verifying a message', () => {
         const message = "Hello, world!";
         const signature = sign(message, keyPair);
+        console.log(`signature: ${signature}`)
         const isVerified = verify(message, signature, keyPair);
         expect(isVerified).toBe(true);
     });
     describe('Shared Exchange Key Tests', () => {
-        const recipientSeed = crypto.randomBytes(32);
+        const recipientMnemonic = generateMnemonic(15);
+        console.log(`generated recipientMnemonic logged for testing - ${recipientMnemonic}`);
+
+        const isRecipientMnemonicValid = validateBIP39Mnemonic(recipientMnemonic);
+        console.log(`is recipient generated mnemonic valid ${isRecipientMnemonicValid}`);
+
+        const recipientSeed = mnemonicToSeed(recipientMnemonic, 'recipient pass phrase');
         const recipientKeyPair = seedToKeyPair(recipientSeed);
         const sharedKey = generateSharedExchangeKey(keyPair, recipientKeyPair.getPublic());
 
@@ -70,7 +100,13 @@ describe('Cryptographic Function Tests', () => {
 
 
     test('Encryption and decryption with shared exchange key', () => {
-        const recipientSeed = crypto.randomBytes(32);
+        const recipientMnemonic = generateMnemonic(15);
+        console.log(`generated recipientMnemonic logged for testing - ${recipientMnemonic}`);
+
+        const isRecipientMnemonicValid = validateBIP39Mnemonic(recipientMnemonic);
+        console.log(`is recipient generated mnemonic valid ${isRecipientMnemonicValid}`);
+
+        const recipientSeed = mnemonicToSeed(recipientMnemonic, 'recipient pass phrase');
         const recipientKeyPair = seedToKeyPair(recipientSeed);
 
         const sharedExchangeKeyBN = generateSharedExchangeKey(keyPair, recipientKeyPair.getPublic());
@@ -86,4 +122,50 @@ describe('Cryptographic Function Tests', () => {
         expect(decryptedMessage).toBe(message);
     });
 
+    test('Unique seeds across domains', () => {
+        const networkSeedHex = seeds.network.toString('hex');
+        const identitySeedHex = seeds.identity.toString('hex');
+        const dataSeedHex = seeds.data.toString('hex');
+
+        expect(networkSeedHex).not.toBe(identitySeedHex);
+        expect(networkSeedHex).not.toBe(dataSeedHex);
+        expect(identitySeedHex).not.toBe(dataSeedHex);
+    });
+
+    test('Deterministic key pair regeneration', () => {
+        const regeneratedKeyPair = seedToKeyPair(baseSeed);
+
+        expect(getPublicKeyHex(keyPair)).toBe(getPublicKeyHex(regeneratedKeyPair));
+        expect(getPrivateKeyHex(keyPair)).toBe(getPrivateKeyHex(regeneratedKeyPair));
+    });
+
+    test('Handle minimum seed length gracefully', () => {
+        expect(() => {
+            seedToKeyPair(Buffer.from('short'));
+        }).toThrow('Seed bytes must be provided as a Buffer with a length of 32, or 64 bytes.');
+    });
+
+    test('Handle minimum seed length gracefully', () => {
+        const shortSeed = Buffer.from('1234567890123456');
+        expect(() => seedToKeyPair(shortSeed)).toThrow('Seed bytes must be provided as a Buffer with a length of 32, or 64 bytes.');
+    });
+
+
+    test('Graceful handling of decryption with incorrect key', () => {
+        const wrongKey = crypto.randomBytes(32);
+        const recipientMnemonic = generateMnemonic(15);
+        console.log(`generated recipientMnemonic logged for testing - ${recipientMnemonic}`);
+
+        const isRecipientMnemonicValid = validateBIP39Mnemonic(recipientMnemonic);
+        console.log(`is recipient generated mnemonic valid ${isRecipientMnemonicValid}`);
+
+        const recipientSeed = mnemonicToSeed(recipientMnemonic, 'recipient pass phrase');
+        const recipientKeyPair = seedToKeyPair(recipientSeed);
+        const sharedExchangeKey = generateSharedExchangeKey(keyPair, getPublicKey(recipientKeyPair));
+        const sharedExchangeKeyBuffer = convertSharedExchangeKeyToBuffer(sharedExchangeKey);
+        const encryptedMessage = encryptWithSharedExchangeKey("Test message", sharedExchangeKeyBuffer);
+        expect(() => {
+            decryptWithSharedExchangeKey(encryptedMessage, wrongKey);
+        }).toThrow();
+    });
 });
