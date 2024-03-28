@@ -1,0 +1,35 @@
+name: Branch Protection
+
+on:
+  push:
+    branches:
+      - dev
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  apply-branch-protection:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install Git
+        run: sudo apt-get update && sudo apt-get install -y git
+
+      - name: Use Node.js version specified in .nvmrc
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+          nvm install && nvm use
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Apply branch protection
+        env:
+          PAT: ${{ secrets.PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node repo-rules.js

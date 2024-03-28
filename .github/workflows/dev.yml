@@ -1,0 +1,39 @@
+name: DEVELOPMENT
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  development:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install Git
+        run: sudo apt-get update && sudo apt-get install -y gh git
+
+      - name: Use Node.js version specified in .nvmrc
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+          nvm install && nvm use
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link project
+        run: npm link
+
+      - name: Link project by name
+        run: npm link ecc
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build package
+        run: npm run build
