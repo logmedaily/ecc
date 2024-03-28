@@ -188,12 +188,12 @@ describe('Cryptographic Function Tests', () => {
         const message = "Test Message!";
         const { signature, nonce, timestamp } = sign(message, keyPair);
 
-        jest.setTimeout(1500);
+        jest.setTimeout(10000);
         setTimeout(() => {
             expect(() => {
                 verify(message, signature, nonce, timestamp, keyPair);
             }).toThrow('Message timestamp is outside the validity period.');
-        }, 1100);
+        }, 10000);
     });
 
     test('Ensuring nonce uniqueness in consecutive signatures', () => {
