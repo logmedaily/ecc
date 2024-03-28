@@ -60,13 +60,6 @@ describe('Cryptographic Function Tests', () => {
         expect(privateKeyHex).toMatch(/^[0-9a-fA-F]+$/);
     });
 
-    test('Signing and verifying a message', () => {
-        const message = "Hello, world!";
-        const signature = sign(message, keyPair);
-        console.log(`signature: ${signature}`)
-        const isVerified = verify(message, signature, keyPair);
-        expect(isVerified).toBe(true);
-    });
     describe('Shared Exchange Key Tests', () => {
         const recipientMnemonic = generateMnemonic(15);
         console.log(`generated recipientMnemonic logged for testing - ${recipientMnemonic}`);
@@ -168,4 +161,49 @@ describe('Cryptographic Function Tests', () => {
             decryptWithSharedExchangeKey(encryptedMessage, wrongKey);
         }).toThrow();
     });
+
+    test('Signing with timestamp and nonce', () => {
+        const message = "Test Message!";
+        const { signature, nonce, timestamp } = sign(message, keyPair);
+
+        expect(signature).toBeDefined();
+        expect(nonce).toMatch(/^[0-9a-fA-F]+$/);
+        expect(timestamp).toBeLessThanOrEqual(Date.now());
+
+        console.log(`Signed at ${new Date(timestamp).toISOString()} with nonce ${nonce}: ${signature}`);
+    });
+
+    test('Verifying with timestamp and nonce within validity period', () => {
+        const message = "Test Message!";
+        const { signature, nonce, timestamp } = sign(message, keyPair);
+
+        jest.setTimeout(2000);
+        setTimeout(() => {
+            const isVerified = verify(message, signature, nonce, timestamp, keyPair);
+            expect(isVerified).toBe(true);
+        }, 1000);
+    });
+
+    test('Handling expired timestamp in verification', () => {
+        const message = "Test Message!";
+        const { signature, nonce, timestamp } = sign(message, keyPair);
+
+        jest.setTimeout(1500);
+        setTimeout(() => {
+            expect(() => {
+                verify(message, signature, nonce, timestamp, keyPair);
+            }).toThrow('Message timestamp is outside the validity period.');
+        }, 1100);
+    });
+
+    test('Ensuring nonce uniqueness in consecutive signatures', () => {
+        const message = "Test Message!";
+        const firstSignatureData = sign(message, keyPair);
+        const secondSignatureData = sign(message, keyPair);
+        expect(firstSignatureData.nonce).not.toEqual(secondSignatureData.nonce);
+    });
+
+
+
+
 });
