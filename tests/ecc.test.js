@@ -11,7 +11,8 @@ const {
     generateSharedExchangeKey,
     encryptWithSharedExchangeKey,
     decryptWithSharedExchangeKey, generateSharedExchangeKeyHex, generateSharedExchangeKeyBN,
-    convertSharedExchangeKeyToBuffer, deriveDomainSeed
+    convertSharedExchangeKeyToBuffer, deriveDomainSeed, generateRandomSeed, getIdentityPublicKeyHex,
+    verifyIdentityAddress
 } = require('../lib');
 
 describe('Cryptographic Function Tests', () => {
@@ -26,7 +27,6 @@ describe('Cryptographic Function Tests', () => {
 
     console.log(`generatedSeed is ${baseSeed.toString('hex')}`);
 
-    // Derive domain-specific seeds
     const seeds = {
         network: deriveDomainSeed(baseSeed, 'network'),
         identity: deriveDomainSeed(baseSeed, 'identity'),
@@ -191,4 +191,47 @@ describe('Cryptographic Function Tests', () => {
         const secondSignatureData = sign(message, keyPair);
         expect(firstSignatureData.nonce).not.toEqual(secondSignatureData.nonce);
     });
+
+    test('Domain-specific seeds are distinct', () => {
+        const networkSeed = deriveDomainSeed(baseSeed, 'network').toString('hex');
+        const identitySeed = deriveDomainSeed(baseSeed, 'identity').toString('hex');
+        const dataSeed = deriveDomainSeed(baseSeed, 'data').toString('hex');
+
+        expect(networkSeed).not.toBe(identitySeed);
+        expect(networkSeed).not.toBe(dataSeed);
+        expect(identitySeed).not.toBe(dataSeed);
+    });
+
+    test('Ephemeral keys are unique for each session', () => {
+        const ephemeralKeyPair1 = seedToKeyPair(generateRandomSeed(), 'ephemeral');
+        const ephemeralKeyPair2 = seedToKeyPair(generateRandomSeed(), 'ephemeral');
+
+        expect(getPublicKeyHex(ephemeralKeyPair1)).not.toBe(getPublicKeyHex(ephemeralKeyPair2));
+    });
+
+    test('Checksum validation detects errors in identity addresses', () => {
+        const attribute = "example";
+        const identityAddress = getIdentityPublicKeyHex(attribute, keyPairs.identity);
+
+        console.log(`Identity Address: ${identityAddress}`);
+
+        const alteredAddress = identityAddress.substring(0, identityAddress.length - 1) + (identityAddress[identityAddress.length - 1] === '1' ? '0' : '1');
+        console.log(`Altered Address: ${alteredAddress}`);
+
+        const isValid = verifyIdentityAddress(alteredAddress, attribute, keyPairs.identity);
+        expect(isValid).toBeFalsy();
+    });
+
+    test('Regeneration of domain-specific keys is consistent', () => {
+        const seed = generateRandomSeed();
+        const domain = 'network';
+
+        const keyPair1 = seedToKeyPair(seed, domain);
+        const keyPair2 = seedToKeyPair(seed, domain);
+
+        expect(getPublicKeyHex(keyPair1)).toBe(getPublicKeyHex(keyPair2));
+    });
+
+
+
 });
