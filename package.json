@@ -1,6 +1,6 @@
 {
   "name": "@logmedaily/ecc",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "publishConfig": {
     "access": "public"
   },
@@ -26,7 +26,7 @@
   "author": "logmedaily",
   "license": "MIT",
   "dependencies": {
-    "@logmedaily/bip39": "^1.0.0",
+    "@logmedaily/bip39": "^1.0.1",
     "elliptic": "^6.5.5"
   },
   "devDependencies": {
